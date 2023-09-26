@@ -55,7 +55,8 @@ typedef struct
     hid_host_driver_event_t event;
     void *arg;
 } hid_host_event_queue_t;
-static uint8_t s_example_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xa0, 0xb7, 0x65, 0x4b, 0x0d, 0xf4};
+// 84:fc:e6:c7:8c:58
+static uint8_t s_example_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xa0, 0xb7, 0x65, 0x4b, 0x5a, 0xb0};
 static uint16_t s_example_espnow_seq[EXAMPLE_ESPNOW_DATA_MAX] = {0, 0};
 static void example_espnow_deinit(example_espnow_send_param_t *send_param);
 
@@ -87,12 +88,6 @@ static void example_wifi_init(void)
 static void hid_host_generic_report_callback(const uint8_t *const data, const int length)
 {
 
-    // hid_print_new_device_report_header(HID_PROTOCOL_NONE);
-    // for (int i = 0; i < length; i++)
-    // {
-    //     printf("%02X", data[i]);
-    // }
-    // putchar('\r');
     hid_ps4_input_report_boot_t *ps4_report = (hid_ps4_input_report_boot_t *)data;
 
     if (length < sizeof(hid_ps4_input_report_boot_t))
@@ -315,10 +310,10 @@ void example_espnow_data_prepare(example_espnow_send_param_t *send_param)
 
     assert(send_param->len >= sizeof(ps4_msg_t));
 
+    buf->header = 0x95;
     buf->buttons_1.val = msg.buttons_1.val;
     buf->buttons_2.val = msg.buttons_2.val;
     buf->buttons_3.val = msg.buttons_3.val;
-    buf->header = msg.header;
     buf->left_joy_x = msg.left_joy_x;
     buf->left_joy_y = msg.left_joy_y;
     buf->right_joy_x = msg.right_joy_x;
