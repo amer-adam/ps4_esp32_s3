@@ -43,9 +43,10 @@ QueueHandle_t hid_host_event_queue;
 bool user_shutdown = false;
 static QueueHandle_t s_example_espnow_queue;
 ps4_msg_t msg;
+
+//timeout counter 
 uint32_t counter = 0;
 uint32_t callback_time = 0;
-// uint32_t counter;
 
 /**
  * @brief HID Host event
