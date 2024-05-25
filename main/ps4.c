@@ -44,6 +44,10 @@ bool user_shutdown = false;
 static QueueHandle_t s_example_espnow_queue;
 ps4_msg_t msg;
 
+//timeout counter 
+uint32_t counter = 0;
+uint32_t callback_time = 0;
+
 /**
  * @brief HID Host event
  *
@@ -56,7 +60,9 @@ typedef struct
     void *arg;
 } hid_host_event_queue_t;
 // 84:fc:e6:c7:8c:58
-static uint8_t s_example_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xa0, 0xb7, 0x65, 0x4b, 0x5a, 0xb0};
+//EC:DA:3B:67:75:A8
+
+static uint8_t s_example_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xA0, 0xB7, 0x65, 0x4B, 0x0D, 0xF4};
 static uint16_t s_example_espnow_seq[EXAMPLE_ESPNOW_DATA_MAX] = {0, 0};
 static void example_espnow_deinit(example_espnow_send_param_t *send_param);
 
@@ -145,6 +151,9 @@ void hid_host_interface_callback(hid_host_device_handle_t hid_device_handle,
         ESP_LOGE(TAG, "HID Device, protocol  Unhandled event");
         break;
     }
+
+    callback_time = counter;
+    counter = 0;
 }
 
 /**
@@ -302,24 +311,38 @@ static void example_espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_
     }
 }
 
-
 /* Prepare ESPNOW data to be sent. */
 void example_espnow_data_prepare(example_espnow_send_param_t *send_param)
 {
     ps4_msg_t *buf = (ps4_msg_t *)send_param->buffer;
 
     assert(send_param->len >= sizeof(ps4_msg_t));
-
-    buf->header = 0x95;
-    buf->buttons_1.val = msg.buttons_1.val;
-    buf->buttons_2.val = msg.buttons_2.val;
-    buf->buttons_3.val = msg.buttons_3.val;
-    buf->left_joy_x = msg.left_joy_x;
-    buf->left_joy_y = msg.left_joy_y;
-    buf->right_joy_x = msg.right_joy_x;
-    buf->right_joy_y = msg.right_joy_y;
-    buf->left_trigger = msg.left_trigger;
-    buf->right_trigger = msg.right_trigger;
+    if (counter - callback_time >= 5)
+    {
+        buf->header = 0x95;
+        buf->buttons_1.val = 0x08;
+        buf->buttons_2.val = 0x00;
+        buf->buttons_3.val = 0x00;
+        buf->left_joy_x = 0x7d;
+        buf->left_joy_y = 0x7d;
+        buf->right_joy_x = 0x7d;
+        buf->right_joy_y = 0x7d;
+        buf->left_trigger = 0x00;
+        buf->right_trigger = 0x00;
+    }
+    else
+    {
+        buf->header = 0x95;
+        buf->buttons_1.val = msg.buttons_1.val;
+        buf->buttons_2.val = msg.buttons_2.val;
+        buf->buttons_3.val = msg.buttons_3.val;
+        buf->left_joy_x = msg.left_joy_x;
+        buf->left_joy_y = msg.left_joy_y;
+        buf->right_joy_x = msg.right_joy_x;
+        buf->right_joy_y = msg.right_joy_y;
+        buf->left_trigger = msg.left_trigger;
+        buf->right_trigger = msg.right_trigger;
+    }
 }
 
 static void example_espnow_task(void *pvParameter)
@@ -334,6 +357,7 @@ static void example_espnow_task(void *pvParameter)
 #ifdef SENDER
     ESP_LOGI(TAG, "Start sending broadcast data");
     example_espnow_send_param_t *send_param = (example_espnow_send_param_t *)pvParameter;
+
     /* Start sending broadcast ESPNOW data. */
     if (esp_now_send(send_param->dest_mac, send_param->buffer, send_param->len) != ESP_OK)
     {
@@ -352,14 +376,15 @@ static void example_espnow_task(void *pvParameter)
         case EXAMPLE_ESPNOW_SEND_CB:
         {
             example_espnow_event_send_cb_t *send_cb = &evt.info.send_cb;
-        
+            counter++;
+
             /* Delay a while before sending the next data. */
             if (send_param->delay > 0)
             {
                 vTaskDelay(send_param->delay / portTICK_PERIOD_MS);
             }
-
-            ESP_LOGI(TAG, "send data to " MACSTR "", MAC2STR(send_cb->mac_addr));
+            // uncomment to see the sending data
+            // ESP_LOGI(TAG, "send data to " MACSTR "", MAC2STR(send_cb->mac_addr));
 
             memcpy(send_param->dest_mac, send_cb->mac_addr, ESP_NOW_ETH_ALEN);
             example_espnow_data_prepare(send_param);
@@ -492,9 +517,11 @@ void app_main(void)
     ulTaskNotifyTake(false, 1000);
 
     /*
-     * HID host driver configuration
+     * * HID host driver configuration
      * - create background task for handling low level event inside the HID driver
      * - provide the device callback to get new HID Device connection event
+     * - create background task for handling low level USB events
+     *  Device connection event
      */
     const hid_host_driver_config_t hid_host_driver_config = {
         .create_background_task = true,
